@@ -9,40 +9,22 @@ import numpy as np
 sys.path.append("..")
 import convert
 
-def sharpen(im):
-    # convert image depth, for Laplacian function
-    im32 = cv.CreateImage(cv.GetSize(im), cv.IPL_DEPTH_32F, 1)
-    cv.Convert(im, im32)
-
-    # sharpen by adding the Laplacian to the image    
-    lap = cv.CreateImage(cv.GetSize(im), cv.IPL_DEPTH_32F, 1)
-    cv.Laplace(im32, lap)
-    res = cv.CreateImage(cv.GetSize(im), cv.IPL_DEPTH_8U, 1)
-    cv.Convert(lap, res)
-    lap = res
-    
-    cv.Add(im, lap, res)
-    
-    return res
-    
 def binarizeImage(im):
-    # since different parts of the image may be illuminated differently,
-    # run the threshold algorithm on each part separately
-    # TODO: check AdaptiveThreshold function
-    imSize = cv.GetSize(im)
-    bin = cv.CreateImage(imSize, 8, 1)
-    numDivs = 4
-    divHeight = imSize[1]//numDivs
-    divWidth = imSize[0]//numDivs
-    for j in range(numDivs):
-        for i in range(numDivs):
-            rect = (i*divWidth, j*divHeight, divWidth, divHeight)
-            print rect, imSize
-            cv.SetImageROI(im, rect)
-            dest = cv.GetSubRect(bin, rect)
-            cv.Threshold(im, dest, 0, 255, cv.CV_THRESH_BINARY_INV | cv.CV_THRESH_OTSU)
-            cv.ResetImageROI(im)
+    # convert to binary by setting pixels darker from some threshold to 255, and
+    # zeroing the others.
+    # the image may not be illuminated uniformly, so apply an adaptive
+    # threshold.
+    divisor = 9
+    blockSize = min(cv.GetSize(im)) / divisor
+    blockSize += 1 - blockSize % 2 # make sure it's odd
+    bin = cv.CloneImage(im)
+    cv.AdaptiveThreshold(im, bin, 255, thresholdType=cv.CV_THRESH_BINARY_INV,
+        blockSize=blockSize)
     return bin
+    
+def showImage(name, im):
+    cv.NamedWindow(name, 0)
+    cv.ShowImage(name, im)
 
 def main():
     if len(sys.argv) != 2:
@@ -51,14 +33,18 @@ def main():
 
     # load image
     filename = sys.argv[1]
-    src = cv.LoadImage(filename, cv.CV_LOAD_IMAGE_GRAYSCALE)
-    cv.NamedWindow("B&W", 0)
-    cv.ShowImage("B&W", src)
+    im = cv.LoadImage(filename, cv.CV_LOAD_IMAGE_GRAYSCALE)
+    showImage("B&W", im)
+    
+    # smooth a little since image is noisy (at least from Nokia...)
+    smoothed = cv.CloneImage(im)
+    cv.Smooth(im, smoothed, cv.CV_MEDIAN, 5)
+    im = smoothed
+    showImage("Smoothed", im)
     
     # convert to binary
-    bin = binarizeImage(src)
-    cv.NamedWindow("Binary", 0)
-    cv.ShowImage("Binary", bin)
+    im = binarizeImage(im)
+    showImage("Binary", im)
 
     cv.WaitKey(0)
     
