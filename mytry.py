@@ -26,6 +26,23 @@ def showImage(name, im):
     cv.NamedWindow(name, 0)
     cv.ShowImage(name, im)
 
+# return a binary image containing largest connected component.
+def getLargestBlob(im):
+    # FindContours modifies source image, so clone it
+    dst = cv.CloneImage(im)
+    contour = cv.FindContours(dst,
+        cv.CreateMemStorage(), cv.CV_RETR_EXTERNAL, cv.CV_CHAIN_APPROX_SIMPLE)
+    maxArea, maxContour = 0, None
+    while contour:
+        area = abs(cv.ContourArea(contour))
+        if area > maxArea:
+            maxArea = area
+            maxContour = contour
+        contour = contour.h_next()
+    cv.Zero(dst)
+    cv.DrawContours(dst, maxContour, 255, 0, -1, 2, 8)
+    return dst
+
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
@@ -55,8 +72,11 @@ def main():
     im = binarizeImage(im)
     showImage("Binary", im)
 
-    # # scale down image 
-    
+    # get largest connected component (blob). hopefully it's the puzzle's margins.
+    # TODO: check if this step is really needed for the Hough transform later.
+    maxBlob = getLargestBlob(im)
+    showImage("Max Component", maxBlob)
+
     cv.WaitKey(0)
     
 if __name__ == "__main__":
