@@ -43,6 +43,25 @@ def getLargestBlob(im):
     cv.DrawContours(dst, maxContour, 255, 0, -1, 2, 8)
     return dst
 
+# find intersection of two lines, given as a (rho, theta) pair
+def findIntersection(line1, line2):
+    # the normal to each line is (cos(theta),sin(theta)).
+    # a point is on the line only if its projection on the normal
+    # equals rho. hence we get two linear equations.
+    rho1, theta1 = line1
+    rho2, theta2 = line2
+    A = cv.CreateMat(2, 2, cv.CV_64F)
+    A[0,0] = cos(theta1)
+    A[1,0] = cos(theta2)
+    A[0,1] = sin(theta1)
+    A[1,1] = sin(theta2)
+    B = cv.CreateMat(2, 1, cv.CV_64F)
+    B[0,0] = rho1
+    B[1,0] = rho2
+    X = cv.CreateMat(2, 1, cv.CV_64F)
+    cv.Solve(A, B, X)
+    return X[0,0], X[1,0]
+    
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
@@ -74,12 +93,12 @@ def main():
     im = binarizeImage(im)
     showImage("Binary", im)
 
-    # get largest connected component (blob). hopefully it's the puzzle's margins.
+    # get largest connected component (blob). hopefully it's the puzzle's border.
     # TODO: check if this step is really needed for the Hough transform later.
     maxBlob = getLargestBlob(im)
     showImage("Max Component", maxBlob)
 
-    # do the Hough to get puzzle's margins as lines so we can compute its corners.
+    # do the Hough to get puzzle's border as lines so we can compute its corners.
     # TODO: we get too many lines because the blob is too thick. apply skeletonization/thinning?
     # the problem is that we'd like to use the lines with the highest number
     # of votes, instead of using any random line above an arbitrary threshold,
@@ -89,7 +108,7 @@ def main():
     lines = cv.HoughLines2(maxBlob, cv.CreateMemStorage(), cv.CV_HOUGH_STANDARD,
         rhoStep, thetaStep, 250)
         
-    # see which line(s) corresponds to which part of the margin: top/left/bottom/right.
+    # see which line(s) corresponds to which part of the border: top/left/bottom/right.
     # each line is represented as a (rho, theta) pair, where 0 <= theta < PI is
     # the angle of the normal to the line, and rho is the line's distance
     # from the origin. since the origin is at the top-left corner of the image, we
@@ -109,6 +128,10 @@ def main():
             else:
                 leftLine = (rho, theta)
 
+    # find intersections (corners)
+    topLeft, topRight = [findIntersection(topLine, line) for line in (leftLine, rightLine)]
+    bottomLeft, bottomRight = [findIntersection(bottomLine, line) for line in (leftLine, rightLine)]
+    
     #  show Hough result
     color_dst = cv.CreateImage(cv.GetSize(origImage), 8, 3)
     cv.CvtColor(origImage, color_dst, cv.CV_GRAY2BGR)
@@ -120,10 +143,10 @@ def main():
         pt1 = (cv.Round(x0 + 1000*(-b)), cv.Round(y0 + 1000*(a)))
         pt2 = (cv.Round(x0 - 1000*(-b)), cv.Round(y0 - 1000*(a)))
         cv.Line(color_dst, pt1, pt2, cv.RGB(255, 0, 0), 1, 8)
+    for x,y in [topLeft, topRight, bottomLeft, bottomRight]:
+        cv.Circle(color_dst, (int(x), int(y)), 20, cv.RGB(255, 100, 0))
     showImage("Hough", color_dst)
 
-    # TODO: find line intersection 
-    
     # TODO: reproject image
     
     cv.WaitKey(0)
