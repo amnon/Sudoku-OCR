@@ -65,6 +65,7 @@ def main():
     # it will help to always work on the same size?)
     imSize = cv.GetSize(im)
     tmp = cv.CreateImage((imSize[0]/3, imSize[1]/3), im.depth, 1)
+    del imSize
     cv.Resize(im, tmp)
     im = tmp
     
@@ -76,6 +77,49 @@ def main():
     # TODO: check if this step is really needed for the Hough transform later.
     maxBlob = getLargestBlob(im)
     showImage("Max Component", maxBlob)
+
+    # do the Hough to get puzzle's margins as lines so we can compute its corners.
+    # TODO: we get too many lines because the blob is too thick. apply skeletonization/thinning?
+    # the problem is that we'd like to use the lines with the highest number
+    # of votes, instead of using any random line above an arbitrary threshold,
+    # but OpenCV doesn't give us any indication about this.
+    # maybe it's better to implement the Hough transform myself.
+    rhoStep, thetaStep = 1, pi/180
+    lines = cv.HoughLines2(maxBlob, cv.CreateMemStorage(), cv.CV_HOUGH_STANDARD,
+        rhoStep, thetaStep, 250)
+        
+    # see which line(s) corresponds to which part of the margin: top/left/bottom/right.
+    # each line is represented as a (rho, theta) pair, where 0 <= theta < PI is
+    # the angle of the normal to the line, and rho is the line's distance
+    # from the origin. since the origin is at the top-left corner of the image, we
+    # can use rho to know which line it is.
+    width, height = cv.GetSize(im)
+    for (rho, theta) in lines:
+        if pi/4 < theta < pi*3/4:
+            # horizontal
+            if abs(rho) > height/2:
+                bottomLine = (rho, theta)
+            else:
+                topLine = (rho, theta)
+        else:
+            # vertical
+            if abs(rho) > width/2:
+                rightLine = (rho, theta)
+            else:
+                leftLine = (rho, theta)
+
+    #  show Hough result
+    color_dst = cv.CreateImage(cv.GetSize(im), 8, 3)
+    cv.CvtColor(im, color_dst, cv.CV_GRAY2BGR)
+    for (rho, theta) in [topLine, leftLine, bottomLine, rightLine]:
+        a = cos(theta)
+        b = sin(theta)
+        x0 = a * rho 
+        y0 = b * rho
+        pt1 = (cv.Round(x0 + 1000*(-b)), cv.Round(y0 + 1000*(a)))
+        pt2 = (cv.Round(x0 - 1000*(-b)), cv.Round(y0 - 1000*(a)))
+        cv.Line(color_dst, pt1, pt2, cv.RGB(255, 0, 0), 1, 8)
+    showImage("Hough", color_dst)
 
     cv.WaitKey(0)
     
