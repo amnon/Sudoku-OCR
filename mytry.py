@@ -68,7 +68,8 @@ def main():
     del imSize
     cv.Resize(im, tmp)
     im = tmp
-    
+    origImage = im
+
     # convert to binary
     im = binarizeImage(im)
     showImage("Binary", im)
@@ -109,8 +110,8 @@ def main():
                 leftLine = (rho, theta)
 
     #  show Hough result
-    color_dst = cv.CreateImage(cv.GetSize(im), 8, 3)
-    cv.CvtColor(im, color_dst, cv.CV_GRAY2BGR)
+    color_dst = cv.CreateImage(cv.GetSize(origImage), 8, 3)
+    cv.CvtColor(origImage, color_dst, cv.CV_GRAY2BGR)
     for (rho, theta) in [topLine, leftLine, bottomLine, rightLine]:
         a = cos(theta)
         b = sin(theta)
@@ -121,6 +122,10 @@ def main():
         cv.Line(color_dst, pt1, pt2, cv.RGB(255, 0, 0), 1, 8)
     showImage("Hough", color_dst)
 
+    # TODO: find line intersection 
+    
+    # TODO: reproject image
+    
     cv.WaitKey(0)
     
 if __name__ == "__main__":
