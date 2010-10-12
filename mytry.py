@@ -168,7 +168,7 @@ def main():
 
     # reproject puzzle to a square image
     newWidth = newHeight = max(cv.GetSize(im))
-    im = reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
+    im = reprojectQuad(origImage, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
     showImage("Warped", im)
     
     cv.WaitKey(0)
