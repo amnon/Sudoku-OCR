@@ -61,6 +61,25 @@ def findIntersection(line1, line2):
     X = cv.CreateMat(2, 1, cv.CV_64F)
     cv.Solve(A, B, X)
     return X[0,0], X[1,0]
+
+# reproject a quadrilateral region in the image to quadrangle with the
+# given size, using perspective projection
+def reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, newSize):
+    width, height = newSize
+
+    # compute transform
+    map = cv.CreateMat(3, 3, cv.CV_64F)
+    src, dst = zip(
+        (topLeft, (0,0)),
+        (bottomLeft, (0,height-1)),
+        (bottomRight, (width-1,height-1)),
+        (topRight, (width-1,0)))
+    cv.GetPerspectiveTransform(src, dst, map)
+
+    # apply transform
+    newIm = cv.CreateImage((height,width), im.depth, im.nChannels)
+    cv.WarpPerspective(im, newIm, map)
+    return newIm
     
 def main():
     if len(sys.argv) != 2:
@@ -147,7 +166,10 @@ def main():
         cv.Circle(color_dst, (int(x), int(y)), 20, cv.RGB(255, 100, 0))
     showImage("Hough", color_dst)
 
-    # TODO: reproject image
+    # reproject puzzle to a square image
+    newWidth = newHeight = max(cv.GetSize(im))
+    im = reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
+    showImage("Warped", im)
     
     cv.WaitKey(0)
     
