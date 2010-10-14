@@ -170,6 +170,13 @@ def main():
     newWidth = newHeight = max(cv.GetSize(im))
     im = reprojectQuad(origImage, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
     showImage("Warped", im)
+
+    # binarize warped image (if we warp the binary image, the result isn't binary
+    # due to interpolation. if we use NN interpolation it looks bad)
+    cv.Smooth(im, im, cv.CV_MEDIAN, 5)
+    cv.AdaptiveThreshold(im, im, 255, thresholdType=cv.CV_THRESH_BINARY_INV,
+        blockSize=11)
+    showImage("Warp binarized", im)
     
     cv.WaitKey(0)
     
