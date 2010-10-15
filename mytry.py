@@ -167,17 +167,17 @@ def main():
     showImage("Hough", color_dst)
 
     # reproject puzzle to a square image
-    newWidth = newHeight = max(cv.GetSize(im))
+    newWidth = newHeight = 400
     im = reprojectQuad(origImage, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
     showImage("Warped", im)
 
     # binarize warped image (if we warp the binary image, the result isn't binary
     # due to interpolation. if we use NN interpolation it looks bad)
-    cv.Smooth(im, im, cv.CV_MEDIAN, 5)
     cv.AdaptiveThreshold(im, im, 255, thresholdType=cv.CV_THRESH_BINARY_INV,
-        blockSize=11)
+        blockSize=9)
+    cv.Smooth(im, im, cv.CV_MEDIAN, 3)
     showImage("Warp binarized", im)
-    
+
     cv.WaitKey(0)
     
 if __name__ == "__main__":
