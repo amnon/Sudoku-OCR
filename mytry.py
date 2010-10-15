@@ -31,7 +31,7 @@ def getLargestBlob(im):
     # FindContours modifies source image, so clone it
     dst = cv.CloneImage(im)
     contour = cv.FindContours(dst,
-        cv.CreateMemStorage(), cv.CV_RETR_EXTERNAL, cv.CV_CHAIN_APPROX_SIMPLE)
+        cv.CreateMemStorage(), cv.CV_RETR_EXTERNAL, cv.CV_CHAIN_APPROX_NONE)
     maxArea, maxContour = 0, None
     while contour:
         area = abs(cv.ContourArea(contour))
@@ -40,7 +40,7 @@ def getLargestBlob(im):
             maxContour = contour
         contour = contour.h_next()
     cv.Zero(dst)
-    cv.DrawContours(dst, maxContour, 255, 0, -1, 2, 8)
+    cv.DrawContours(dst, maxContour, 255, 0, -1, 1, 8)
     return dst
 
 # find intersection of two lines, given as a (rho, theta) pair
@@ -80,7 +80,45 @@ def reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, newSize):
     newIm = cv.CreateImage((height,width), im.depth, im.nChannels)
     cv.WarpPerspective(im, newIm, map)
     return newIm
+
+# extracts a digit blob from the given box in the image.
+# modifies the image so that only the blob remains.
+def extractDigit(im, box):
+    cv.SetImageROI(im, box)
+    contour = cv.FindContours(im,
+        cv.CreateMemStorage(), cv.CV_RETR_CCOMP, cv.CV_CHAIN_APPROX_SIMPLE,
+        offset=box[0:2])
     
+    # minimum blob area to consider. used to ignore noise in empty boxes.
+    minArea = 20
+    
+    maxArea, maxContour = minArea, None
+    
+    # find largest blob
+    while contour:
+        # make sure we're not looking at the border,
+        # by checking the distance from the center
+        res = cv.PointPolygonTest(contour, (box[0]+box[2]/2, box[1]+box[3]/2), True)
+        # threshold aquired by trial and error.
+        # not sure why the distance is negative
+        if res < -10:
+            contour = contour.h_next()
+            continue
+            
+        # TODO: another way we can do it is by checking the bounding rectange
+        
+        area = abs(cv.ContourArea(contour))
+        if area > maxArea:
+            maxArea = area
+            maxContour = contour
+        contour = contour.h_next()
+    cv.Zero(im)
+    cv.ResetImageROI(im)
+    if not maxContour:
+        # no digit found
+        return
+    cv.DrawContours(im, maxContour, 255, 0, -1, cv.CV_FILLED, 8)
+
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
@@ -125,7 +163,7 @@ def main():
     # maybe it's better to implement the Hough transform myself.
     rhoStep, thetaStep = 1, pi/180
     lines = cv.HoughLines2(maxBlob, cv.CreateMemStorage(), cv.CV_HOUGH_STANDARD,
-        rhoStep, thetaStep, 250)
+        rhoStep, thetaStep, 125)
         
     # see which line(s) corresponds to which part of the border: top/left/bottom/right.
     # each line is represented as a (rho, theta) pair, where 0 <= theta < PI is
@@ -167,7 +205,7 @@ def main():
     showImage("Hough", color_dst)
 
     # reproject puzzle to a square image
-    newWidth = newHeight = 400
+    newWidth = newHeight = 396
     im = reprojectQuad(origImage, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
     showImage("Warped", im)
 
@@ -178,6 +216,15 @@ def main():
     cv.Smooth(im, im, cv.CV_MEDIAN, 3)
     showImage("Warp binarized", im)
 
+    # divide to boxes. extract digit (if any) from box.
+    xs = [newWidth/9 * i for i in range(9)] + [newWidth]
+    ys = [newHeight/9 * i for i in range(9)] + [newHeight]
+    for i in range(len(xs)-1):
+        for j in range(len(ys)-1):
+            box = (xs[i], ys[j], xs[i+1]-xs[i], ys[j+1]-ys[j])
+            digit = extractDigit(im, box)
+    showImage("Extracted", im)
+    
     cv.WaitKey(0)
     
 if __name__ == "__main__":
