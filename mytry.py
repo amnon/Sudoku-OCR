@@ -137,17 +137,20 @@ def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
         sys.exit(1)
+    processImage(sys.argv[1], interactive=True)
+    cv.WaitKey(0)
 
+def processImage(filename, interactive):
     # load image
-    filename = sys.argv[1]
     im = cv.LoadImage(filename, cv.CV_LOAD_IMAGE_GRAYSCALE)
-    showImage("B&W", im)
+    if interactive:
+        showImage("B&W", im)
     
     # smooth a little since image is noisy (at least with Nokia...)
-    if True:
-        smoothed = cv.CloneImage(im)
-        cv.Smooth(im, smoothed, cv.CV_MEDIAN, 5)
-        im = smoothed
+    smoothed = cv.CloneImage(im)
+    cv.Smooth(im, smoothed, cv.CV_MEDIAN, 5)
+    im = smoothed
+    if interactive:
         showImage("Smoothed", im)
     
     # downscale
@@ -162,12 +165,14 @@ def main():
 
     # convert to binary
     im = binarizeImage(im)
-    showImage("Binary", im)
+    if interactive:
+        showImage("Binary", im)
 
     # get largest connected component (blob). hopefully it's the puzzle's border.
     # TODO: check if this step is really needed for the Hough transform later.
     maxBlob = getLargestBlob(im)
-    showImage("Max Component", maxBlob)
+    if interactive:
+        showImage("Max Component", maxBlob)
 
     # do the Hough to get puzzle's border as lines so we can compute its corners.
     # TODO: we get too many lines because the blob is too thick. apply skeletonization/thinning?
@@ -204,31 +209,34 @@ def main():
     bottomLeft, bottomRight = [findIntersection(bottomLine, line) for line in (leftLine, rightLine)]
     
     #  show Hough result
-    color_dst = cv.CreateImage(cv.GetSize(origImage), 8, 3)
-    cv.CvtColor(origImage, color_dst, cv.CV_GRAY2BGR)
-    for (rho, theta) in [topLine, leftLine, bottomLine, rightLine]:
-        a = cos(theta)
-        b = sin(theta)
-        x0 = a * rho 
-        y0 = b * rho
-        pt1 = (cv.Round(x0 + 1000*(-b)), cv.Round(y0 + 1000*(a)))
-        pt2 = (cv.Round(x0 - 1000*(-b)), cv.Round(y0 - 1000*(a)))
-        cv.Line(color_dst, pt1, pt2, cv.RGB(255, 0, 0), 1, 8)
-    for x,y in [topLeft, topRight, bottomLeft, bottomRight]:
-        cv.Circle(color_dst, (int(x), int(y)), 20, cv.RGB(255, 100, 0))
-    showImage("Hough", color_dst)
+    if interactive:
+        color_dst = cv.CreateImage(cv.GetSize(origImage), 8, 3)
+        cv.CvtColor(origImage, color_dst, cv.CV_GRAY2BGR)
+        for (rho, theta) in [topLine, leftLine, bottomLine, rightLine]:
+            a = cos(theta)
+            b = sin(theta)
+            x0 = a * rho 
+            y0 = b * rho
+            pt1 = (cv.Round(x0 + 1000*(-b)), cv.Round(y0 + 1000*(a)))
+            pt2 = (cv.Round(x0 - 1000*(-b)), cv.Round(y0 - 1000*(a)))
+            cv.Line(color_dst, pt1, pt2, cv.RGB(255, 0, 0), 1, 8)
+        for x,y in [topLeft, topRight, bottomLeft, bottomRight]:
+            cv.Circle(color_dst, (int(x), int(y)), 20, cv.RGB(255, 100, 0))
+        showImage("Hough", color_dst)
 
     # reproject puzzle to a square image
     newWidth = newHeight = 396
     im = reprojectQuad(origImage, topLeft, bottomLeft, bottomRight, topRight, (newWidth, newHeight))
-    showImage("Warped", im)
+    if interactive:
+        showImage("Warped", im)
 
     # binarize warped image (if we warp the binary image, the result isn't binary
     # due to interpolation. if we use NN interpolation it looks bad)
     cv.AdaptiveThreshold(im, im, 255, thresholdType=cv.CV_THRESH_BINARY_INV,
         blockSize=9)
     cv.Smooth(im, im, cv.CV_MEDIAN, 3)
-    showImage("Warp binarized", im)
+    if interactive:
+        showImage("Warp binarized", im)
 
     # divide to boxes. extract digit (if any) from box.
     xs = [newWidth/9 * i for i in range(9)] + [newWidth]
@@ -237,13 +245,14 @@ def main():
         for j in range(len(ys)-1):
             box = (xs[i], ys[j], xs[i+1]-xs[i], ys[j+1]-ys[j])
             digit = extractDigit(im, box)
-    color = 100
-    for i in range(1,9):
-        cv.Line(im, (xs[i], 0), (xs[i], newHeight-1), color)
-        cv.Line(im, (0, ys[i]), (newWidth-1, ys[i]), color)        
-    showImage("Extracted", im)
+    if interactive:
+        tempImage = cv.CloneImage(im)
+        color = 100
+        for i in range(1,9):
+            cv.Line(tempImage, (xs[i], 0), (xs[i], newHeight-1), color)
+            cv.Line(tempImage, (0, ys[i]), (newWidth-1, ys[i]), color)        
+        showImage("Extracted", tempImage)
     
-    cv.WaitKey(0)
     
 if __name__ == "__main__":
     main()
