@@ -105,7 +105,14 @@ def extractDigit(im, box):
             contour = contour.h_next()
             continue
             
-        # TODO: another way we can do it is by checking the bounding rectange
+        # check that the blob isn't too near the edge
+        bounds = cv.BoundingRect(contour)
+        threshold = 10
+        violations = sum(bounds[i]-box[i] < threshold for i in range(2)) + \
+            sum(box[i]+box[i+2]-(bounds[i]+bounds[i+2]) < threshold for i in range(2))
+        if violations >= 3:
+            contour = contour.h_next()
+            continue
         
         area = abs(cv.ContourArea(contour))
         if area > maxArea:
@@ -119,6 +126,13 @@ def extractDigit(im, box):
         return
     cv.DrawContours(im, maxContour, 255, 0, -1, cv.CV_FILLED, 8)
 
+# read a text file containing digit labels.
+# each line in the text file represents a sudoku line.
+# digits represent themselves, space char represents an empty cell.
+def readLabels(fname):
+    with open(fname) as file:
+        return [list("%-9s" % line.replace("\n", "")) for line in file][0:9]
+    
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
@@ -223,6 +237,10 @@ def main():
         for j in range(len(ys)-1):
             box = (xs[i], ys[j], xs[i+1]-xs[i], ys[j+1]-ys[j])
             digit = extractDigit(im, box)
+    color = 100
+    for i in range(1,9):
+        cv.Line(im, (xs[i], 0), (xs[i], newHeight-1), color)
+        cv.Line(im, (0, ys[i]), (newWidth-1, ys[i]), color)        
     showImage("Extracted", im)
     
     cv.WaitKey(0)
