@@ -1,10 +1,8 @@
 #!/usr/bin/python
 
-
 import sys
 from math import sin, cos, sqrt, pi
 import cv
-import numpy as np
 
 sys.path.append("..")
 import convert
@@ -81,6 +79,37 @@ def reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, newSize):
     cv.WarpPerspective(im, newIm, map)
     return newIm
 
+def centerImage(im):
+    # find center of mass, and center image around it
+    height, width = cv.GetSize(im)
+    moments = cv.Moments(im, binary=True)
+    area = cv.GetSpatialMoment(moments, 0, 0)
+    meanX = int(cv.GetSpatialMoment(moments, 1, 0)/area)
+    meanY = int(cv.GetSpatialMoment(moments, 0, 1)/area)
+
+    centered = cv.CreateImage(cv.GetSize(im), im.depth, im.nChannels)
+    cv.Zero(centered)    
+    
+    # the corners are (0,0,width,height). (exclusive)
+    # the corresponding (back-projection) points in the original image
+    # are (-deltaX,-deltaY,width-deltaX,height-deltaY)
+    centerX, centerY = width//2, height//2
+    deltaX, deltaY = centerX - meanX, centerY - meanY
+    left = max(-deltaX, 0)
+    top = max(-deltaY, 0)
+    right = min(width-deltaX, width)
+    bottom = min(height-deltaY, height)
+    srcRect = (left, top, right-left, bottom-top)
+    dstRect = (left+deltaX, top+deltaY, srcRect[2], srcRect[3])
+    origROI = cv.GetImageROI(im)
+    cv.SetImageROI(im, (origROI[0]+srcRect[0], origROI[1]+srcRect[1]) + srcRect[2:4])
+    cv.SetImageROI(centered, dstRect)
+    cv.Copy(im, centered)
+    cv.ResetImageROI(centered)
+    cv.SetImageROI(im, origROI)
+    showImage("bla", centered)
+    return centered
+    
 # extracts a digit blob from the given box in the image.
 # modifies the image so that only the blob remains.
 def extractDigit(im, box):
@@ -96,35 +125,41 @@ def extractDigit(im, box):
     
     # find largest blob
     while contour:
-        # make sure we're not looking at the border,
-        # by checking the distance from the center
-        res = cv.PointPolygonTest(contour, (box[0]+box[2]/2, box[1]+box[3]/2), True)
-        # threshold aquired by trial and error.
-        # not sure why the distance is negative
-        if res < -10:
-            contour = contour.h_next()
-            continue
+        try:
+            # make sure we're not looking at the border,
+            # by checking the distance from the center
+            res = cv.PointPolygonTest(contour, (box[0]+box[2]/2, box[1]+box[3]/2), True)
+            # threshold aquired by trial and error.
+            # not sure why the distance is negative
+            if res < -10:
+                continue
+                
+            # check that the blob isn't too near the edge
+            bounds = cv.BoundingRect(contour)
+            threshold = 10
+            violations = sum(bounds[i]-box[i] < threshold for i in range(2)) + \
+                sum(box[i]+box[i+2]-(bounds[i]+bounds[i+2]) < threshold for i in range(2))
+            if violations >= 3:
+                continue
             
-        # check that the blob isn't too near the edge
-        bounds = cv.BoundingRect(contour)
-        threshold = 10
-        violations = sum(bounds[i]-box[i] < threshold for i in range(2)) + \
-            sum(box[i]+box[i+2]-(bounds[i]+bounds[i+2]) < threshold for i in range(2))
-        if violations >= 3:
+            area = abs(cv.ContourArea(contour))
+            if area > maxArea:
+                maxArea = area
+                maxContour = contour
+        finally:
+            # this code is in "finally" to make sure the loop variable
+            # is updated even after a "continue"
             contour = contour.h_next()
-            continue
-        
-        area = abs(cv.ContourArea(contour))
-        if area > maxArea:
-            maxArea = area
-            maxContour = contour
-        contour = contour.h_next()
     cv.Zero(im)
-    cv.ResetImageROI(im)
+    cv.ResetImageROI(im)    
     if not maxContour:
         # no digit found
-        return
+        return None
     cv.DrawContours(im, maxContour, 255, 0, -1, cv.CV_FILLED, 8)
+    cv.SetImageROI(im, box)
+    centered = centerImage(im)
+    cv.ResetImageROI(im)    
+    return centered
 
 # read a text file containing digit labels.
 # each line in the text file represents a sudoku line.
@@ -156,6 +191,7 @@ def processImage(filename, interactive):
     # downscale
     # (for compatibility with iPhone Soduko Grab. but maybe
     # it will help to always work on the same size?)
+    # FIXME: this code is now not relevant
     imSize = cv.GetSize(im)
     tmp = cv.CreateImage((imSize[0]/3, imSize[1]/3), im.depth, 1)
     del imSize
@@ -189,7 +225,7 @@ def processImage(filename, interactive):
     # the angle of the normal to the line, and rho is the line's distance
     # from the origin. since the origin is at the top-left corner of the image, we
     # can use rho to know which line it is.
-    width, height = cv.GetSize(im)
+    height, width = cv.GetSize(im)
     for (rho, theta) in lines:
         if pi/4 < theta < pi*3/4:
             # horizontal
@@ -241,10 +277,14 @@ def processImage(filename, interactive):
     # divide to boxes. extract digit (if any) from box.
     xs = [newWidth/9 * i for i in range(9)] + [newWidth]
     ys = [newHeight/9 * i for i in range(9)] + [newHeight]
+    digits = []
     for i in range(len(xs)-1):
         for j in range(len(ys)-1):
             box = (xs[i], ys[j], xs[i+1]-xs[i], ys[j+1]-ys[j])
             digit = extractDigit(im, box)
+            if digit:
+                digits.append(((i,j), digit))
+            
     if interactive:
         tempImage = cv.CloneImage(im)
         color = 100
@@ -252,7 +292,7 @@ def processImage(filename, interactive):
             cv.Line(tempImage, (xs[i], 0), (xs[i], newHeight-1), color)
             cv.Line(tempImage, (0, ys[i]), (newWidth-1, ys[i]), color)        
         showImage("Extracted", tempImage)
-    
+    return digits
     
 if __name__ == "__main__":
     main()
