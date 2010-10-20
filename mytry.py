@@ -3,8 +3,6 @@
 import sys
 from math import sin, cos, sqrt, pi
 import cv
-
-sys.path.append("..")
 import convert
 
 def binarizeImage(im):
@@ -107,7 +105,6 @@ def centerImage(im):
     cv.Copy(im, centered)
     cv.ResetImageROI(centered)
     cv.SetImageROI(im, origROI)
-    showImage("bla", centered)
     return centered
     
 # extracts a digit blob from the given box in the image.
