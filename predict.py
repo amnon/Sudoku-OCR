@@ -21,7 +21,9 @@ class KNNClassifier:
         # and choose label of nearest neighbor
         dists2 = np.sum((vec-self.samples)**2, 1)
         nearest = np.argmin(dists2)
-        return self.labels[nearest]
+        # since vectors are binary, dists2 is actually Hamming distance.
+        # don't return result if more than a certain number of the bits are different.
+        return self.labels[nearest] if dists2[nearest] < sum(vec)/2 else '?'
         
 def main():
     if len(sys.argv) != 3:
