@@ -31,7 +31,7 @@ def handlePuzzle(imageFilename, vectorSet):
             print >>sys.stderr, "Warning, cell (%d,%d) not empty but labeled as such" % (i,j)
             continue
 
-        vectorSet.append((label, list(convert.cvImg2np(im).flat)))
+        vectorSet.append((label, list((convert.cvImg2np(im)/255).flat)))
 
 if __name__ == "__main__":
     main()
