@@ -12,7 +12,7 @@ def binarizeImage(im):
     # threshold.
     # actually, OpenCV's adaptive threshold is less than perfect because param1
     # isn't relative to the average pixel values.
-    blockSize = 9
+    blockSize = 19
     bin = cv.CloneImage(im)
     cv.AdaptiveThreshold(im, bin, 255, thresholdType=cv.CV_THRESH_BINARY_INV,
         blockSize=blockSize)
@@ -27,7 +27,7 @@ def getLargestBlob(im):
     # FindContours modifies source image, so clone it
     dst = cv.CloneImage(im)
     contour = cv.FindContours(dst,
-        cv.CreateMemStorage(), cv.CV_RETR_EXTERNAL, cv.CV_CHAIN_APPROX_NONE)
+        cv.CreateMemStorage(), cv.CV_RETR_EXTERNAL, cv.CV_CHAIN_APPROX_SIMPLE)
     maxArea, maxContour = 0, None
     while contour:
         area = abs(cv.ContourArea(contour))
@@ -36,6 +36,11 @@ def getLargestBlob(im):
             maxContour = contour
         contour = contour.h_next()
     cv.Zero(dst)
+    # approximate the contour using a polygon. this is a sort of a smoothing operation,
+    # to make the lines straighter and improve the chance that the Hough transform
+    # will catch them.
+    # TODO: maybe it won't be needed when we finally choose lines based on quality.
+    maxContour = cv.ApproxPoly(maxContour, cv.CreateMemStorage(), cv.CV_POLY_APPROX_DP, 5, 1)
     cv.DrawContours(dst, maxContour, 255, 0, -1, 1, 8)
     return dst
 
@@ -169,7 +174,10 @@ def main():
     if len(sys.argv) != 2:
         sys.stderr.write("Usage: %s filename\n" % sys.argv[0])
         sys.exit(1)
-    processImage(sys.argv[1], interactive=True)
+    try:
+        processImage(sys.argv[1], interactive=True)
+    except Exception, e:
+        print "Got exception:", e
     cv.WaitKey(0)
 
 def processImage(filename, interactive):
@@ -188,7 +196,8 @@ def processImage(filename, interactive):
     # downscale
     # (for compatibility with iPhone Soduko Grab. but maybe
     # it will help to always work on the same size?)
-    # FIXME: this code is now not relevant
+    # FIXME: this code is now not relevant. actually, it is,
+    # for the Hough threshold to be correct.
     imSize = cv.GetSize(im)
     tmp = cv.CreateImage((imSize[0]/3, imSize[1]/3), im.depth, 1)
     del imSize
@@ -203,6 +212,7 @@ def processImage(filename, interactive):
 
     # get largest connected component (blob). hopefully it's the puzzle's border.
     # TODO: check if this step is really needed for the Hough transform later.
+    # right now it does (otherwise the transform gets random inner lines)
     maxBlob = getLargestBlob(im)
     if interactive:
         showImage("Max Component", maxBlob)
