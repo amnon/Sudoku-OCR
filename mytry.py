@@ -79,7 +79,7 @@ def reprojectQuad(im, topLeft, bottomLeft, bottomRight, topRight, newSize):
 
 def centerImage(im):
     # find center of mass, and center image around it
-    height, width = cv.GetSize(im)
+    width, height = cv.GetSize(im)
     moments = cv.Moments(im, binary=True)
     area = cv.GetSpatialMoment(moments, 0, 0)
     meanX = int(cv.GetSpatialMoment(moments, 1, 0)/area)
@@ -222,7 +222,7 @@ def processImage(filename, interactive):
     # the angle of the normal to the line, and rho is the line's distance
     # from the origin. since the origin is at the top-left corner of the image, we
     # can use rho to know which line it is.
-    height, width = cv.GetSize(im)
+    width, height = cv.GetSize(im)
     for (rho, theta) in lines:
         if pi/4 < theta < pi*3/4:
             # horizontal
